@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Tuple
 
 import torch
@@ -13,6 +14,19 @@ from .tokenizer import SVGTokenizer, Vocab
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def load_manifest(data_dir: Path) -> List[Tuple[Path, Path]]:
+    """Pair up ``*.png``/``*.jpg``/``*.jpeg`` with same-stem ``*.svg`` files."""
+    pairs: List[Tuple[Path, Path]] = []
+    svgs = {p.stem: p for p in data_dir.glob("*.svg")}
+    exts = ("*.png", "*.jpg", "*.jpeg")
+    for ext in exts:
+        for img in data_dir.glob(ext):
+            svg = svgs.get(img.stem)
+            if svg is not None:
+                pairs.append((img, svg))
+    return pairs
 
 
 def get_transform(image_size: int = 256) -> Callable:

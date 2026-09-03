@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from .dataset import LogoDataset, collate_fn, get_transform
+from .dataset import LogoDataset, collate_fn, get_transform, load_manifest
 from .model import Im2VecModel
 from .tokenizer import SVGTokenizer, Vocab
 
@@ -63,17 +63,6 @@ def make_synthetic_data(
             output_height=image_size,
         )
         pairs.append((png_path, svg_path))
-    return pairs
-
-
-def load_manifest(data_dir: Path) -> List[Tuple[Path, Path]]:
-    """Pair up ``*.png``/``*.jpg`` with same-stem ``*.svg`` files in ``data_dir``."""
-    pairs: List[Tuple[Path, Path]] = []
-    svgs = {p.stem: p for p in data_dir.glob("*.svg")}
-    for img in list(data_dir.glob("*.png")) + list(data_dir.glob("*.jpg")) + list(data_dir.glob("*.jpeg")):
-        svg = svgs.get(img.stem)
-        if svg is not None:
-            pairs.append((img, svg))
     return pairs
 
 
