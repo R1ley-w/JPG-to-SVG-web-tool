@@ -23,6 +23,7 @@ im2vec/
   dataset.py     # PyTorch Dataset over (raster, svg) pairs
   train.py       # teacher-forced training loop
   infer.py       # autoregressive sampling -> .svg
+  eval.py        # rasterize predictions; L1 / SSIM / IoU vs input
 tests/
 ```
 
