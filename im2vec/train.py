@@ -134,6 +134,15 @@ def main() -> None:
         backbone=args.backbone,
     ).to(device)
 
+    config = {
+        "d_model": args.d_model,
+        "nhead": args.nhead,
+        "num_layers": args.num_layers,
+        "dim_feedforward": args.dim_ff,
+        "max_len": args.max_len,
+        "backbone": args.backbone,
+    }
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -168,7 +177,7 @@ def main() -> None:
 
         if (epoch + 1) % 5 == 0 or args.smoke:
             torch.save(
-                {"model": model.state_dict(), "args": vars(args)},
+                {"model": model.state_dict(), "config": config},
                 args.save_dir / f"model_epoch{epoch + 1}.pt",
             )
 
