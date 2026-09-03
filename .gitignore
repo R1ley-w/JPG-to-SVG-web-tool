@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Data
+data/
+datasets/
+*.pkl
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+logs/
+runs/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
