@@ -76,4 +76,18 @@ def test_arc_stays_near_circle():
 
 
 def test_vocab_size():
-    assert SVGTokenizer().vocab_size == 264
+    assert SVGTokenizer().vocab_size == 265
+
+
+def test_stroke_outline():
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
+        '<circle cx="128" cy="128" r="64" fill="none" stroke="#0000ff" '
+        'stroke-width="4"/></svg>'
+    )
+    out = _roundtrip(svg)
+    assert 'stroke="rgb(0,0,255)"' in out
+    assert 'stroke-width="4"' in out
+    assert 'fill="none"' in out
+    # no filled paths leak in
+    assert 'fill="rgb(' not in out

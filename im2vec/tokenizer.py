@@ -4,7 +4,7 @@ The network predicts SVG as a sequence of tokens. We normalize arbitrary SVG
 input into a small, self-contained subset:
 
     commands : M L C Z          (absolute coordinates, cubic Bezier)
-    color    : flat RGB fill
+    paint    : flat RGB fill, or an outline stroke (color + width)
 
 Token vocabulary (see :class:`Vocab`)::
 
@@ -16,13 +16,14 @@ Token vocabulary (see :class:`Vocab`)::
     5  C
     6  Z
     7  FILL
-    8..            numeric values 0..255 (coordinates and color channels)
+    8  STROKE
+    9..            numeric values 0..255 (coordinates, colors, stroke width)
 
 A single SVG encodes as::
 
-    [SOS] ( FILL r g b  [path-commands] )* [EOS]
+    [SOS] ( FILL r g b [cmds] | STROKE r g b w [cmds] )* [EOS]
 
-where ``path-commands`` are ``M x y | L x y | C x1 y1 x2 y2 x y | Z``.
+where ``cmds`` are ``M x y | L x y | C x1 y1 x2 y2 x y | Z``.
 
 Coordinates are normalized into the ``0..255`` range against the SVG viewBox
 (the same 256x256 canvas the raster input is rendered on), so a decoded SVG is
@@ -53,23 +54,25 @@ class Vocab:
     C = 5
     Z = 6
     FILL = 7
+    STROKE = 8
 
-    NUM_OFFSET = 8  # token id = NUM_OFFSET + value, value in 0..255
+    NUM_OFFSET = 9  # token id = NUM_OFFSET + value, value in 0..255
     NUM_RANGE = 256
 
-    VOCAB_SIZE = NUM_OFFSET + NUM_RANGE  # 264
+    VOCAB_SIZE = NUM_OFFSET + NUM_RANGE  # 265
 
-    COMMANDS = (M, L, C, Z, FILL)
+    COMMANDS = (M, L, C, Z, FILL, STROKE)
     COMMAND_NAMES = {
         M: "M",
         L: "L",
         C: "C",
         Z: "Z",
         FILL: "FILL",
+        STROKE: "STROKE",
     }
 
     # Arity of each command (number of numeric tokens that follow).
-    COMMAND_ARITY = {M: 2, L: 2, C: 6, Z: 0, FILL: 3}
+    COMMAND_ARITY = {M: 2, L: 2, C: 6, Z: 0, FILL: 3, STROKE: 4}
 
 
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -547,38 +550,89 @@ class SVGTokenizer:
         """Encode an SVG document into a token sequence (with SOS/EOS)."""
         shapes = self._extract_shapes(svg_text)
         tokens = [Vocab.SOS]
-        for d, fill in shapes:
-            tokens.append(Vocab.FILL)
-            tokens.extend(Vocab.NUM_OFFSET + c for c in fill)
+        for d, fill, stroke, stroke_width in shapes:
+            if fill is not None:
+                tokens.append(Vocab.FILL)
+                tokens.extend(Vocab.NUM_OFFSET + c for c in fill)
+            elif stroke is not None:
+                tokens.append(Vocab.STROKE)
+                tokens.extend(Vocab.NUM_OFFSET + c for c in stroke)
+                tokens.append(Vocab.NUM_OFFSET + stroke_width)
+            else:
+                tokens.append(Vocab.FILL)
+                tokens.extend(Vocab.NUM_OFFSET + c for c in (0, 0, 0))
             tokens.extend(self._encode_path(d))
         tokens.append(Vocab.EOS)
         return tokens
 
     def _extract_shapes(
         self, svg_text: str
-    ) -> List[Tuple[str, Tuple[int, int, int]]]:
-        """Return a list of (path ``d``, fill) for every drawable element."""
+    ) -> List[Tuple[str, Optional[Tuple[int, int, int]], Optional[Tuple[int, int, int]], int]]:
+        """Return ``(path d, fill, stroke, stroke_width)`` for every element.
+
+        ``fill`` and ``stroke`` are RGB tuples or ``None`` (when the attribute
+        is ``none``/absent for stroke). ``stroke_width`` is quantized to 0..255.
+        """
         root = ET.fromstring(svg_text)
         viewbox = self._viewbox(root)
-        shapes: List[Tuple[str, Tuple[int, int, int]]] = []
+        vw = viewbox[2]
+        sx = (self.canvas_size - 1) / vw if vw else 1.0
+        shapes: List[Tuple[str, Optional[Tuple[int, int, int]], Optional[Tuple[int, int, int]], int]] = []
 
         def walk(elem: ET.Element, matrix: Tuple[float, ...]) -> None:
             local = _compose(matrix, _parse_transform(elem.get("transform")))
             tag = elem.tag.split("}")[-1].lower()
-            fill = _parse_color(elem.get("fill"))
+            fill = self._fill_color(elem)
+            stroke, stroke_width = self._stroke_color(elem)
+            if stroke is not None:
+                stroke_width = max(
+                    0, min(self.canvas_size - 1, int(round(stroke_width * sx)))
+                )
             if tag == "path":
                 d = elem.get("d")
-                if d:
-                    shapes.append((self._normalize(_abs_cubics(_parse_path(d)), local, viewbox), fill))
             else:
                 d = _shape_to_path_d(elem)
-                if d is not None:
-                    shapes.append((self._normalize(_abs_cubics(_parse_path(d)), local, viewbox), fill))
+            if d:
+                shapes.append(
+                    (
+                        self._normalize(_abs_cubics(_parse_path(d)), local, viewbox),
+                        fill,
+                        stroke,
+                        stroke_width,
+                    )
+                )
             for child in elem:
                 walk(child, local)
 
         walk(root, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
         return shapes
+
+    @staticmethod
+    def _fill_color(elem: ET.Element) -> Optional[Tuple[int, int, int]]:
+        value = elem.get("fill")
+        if value is None:
+            return (0, 0, 0)
+        value = value.strip().lower()
+        if value in ("none", "transparent"):
+            return None
+        return _parse_color(value)
+
+    @staticmethod
+    def _stroke_color(
+        elem: ET.Element,
+    ) -> Tuple[Optional[Tuple[int, int, int]], float]:
+        value = elem.get("stroke")
+        width = elem.get("stroke-width", "1")
+        try:
+            width = float(width)
+        except ValueError:
+            width = 1.0
+        if value is None:
+            return None, 0.0
+        value = value.strip().lower()
+        if value in ("none", "transparent"):
+            return None, 0.0
+        return _parse_color(value), width
 
     def _viewbox(self, root: ET.Element) -> Tuple[float, float, float, float]:
         vb = root.get("viewBox")
@@ -645,6 +699,17 @@ class SVGTokenizer:
                 i += 4
                 d, i = self._decode_path(tokens, i)
                 shapes.append(f'<path fill="rgb({r},{g},{b})" d="{d}"/>')
+            elif tok == Vocab.STROKE:
+                r = tokens[i + 1] - Vocab.NUM_OFFSET
+                g = tokens[i + 2] - Vocab.NUM_OFFSET
+                b = tokens[i + 3] - Vocab.NUM_OFFSET
+                w = tokens[i + 4] - Vocab.NUM_OFFSET
+                i += 5
+                d, i = self._decode_path(tokens, i)
+                shapes.append(
+                    f'<path fill="none" stroke="rgb({r},{g},{b})" '
+                    f'stroke-width="{w}" d="{d}"/>'
+                )
             else:
                 i += 1
 
@@ -660,7 +725,7 @@ class SVGTokenizer:
         n = len(tokens)
         while i < n:
             tok = tokens[i]
-            if tok in (Vocab.EOS, Vocab.PAD, Vocab.FILL):
+            if tok in (Vocab.EOS, Vocab.PAD, Vocab.FILL, Vocab.STROKE):
                 break
             cmd = Vocab.COMMAND_NAMES.get(tok)
             if cmd is None:
