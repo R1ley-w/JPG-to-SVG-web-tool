@@ -37,8 +37,26 @@ pip install -r requirements.txt
 ## Dataset
 
 Target dataset: **FIGR-8** logo/pictogram SVGs, rendered to PNG for paired
-raster/vector supervision (see `README` planning notes). Non-commercial license.
+raster/vector supervision. Non-commercial license.
+
+Download SVGs and render paired PNGs (one command):
+
+```
+python -m im2vec.data.prepare --split train --n 5000 --out data/figr8
+```
+
+Or run the two steps separately:
+
+```
+python -m im2vec.data.download --split train --n 5000 --out data/figr8
+python -m im2vec.data.render  --svg-dir data/figr8
+```
+
+`--split` is `train`/`valid`/`test`; `--n` caps the number of SVGs (omit for
+all). PNGs are written alongside the SVGs (same stem) so
+`train.py --data-dir data/figr8` pairs them automatically.
 
 ## Status
 
-Work in progress — neural-network core only (web tool to follow).
+Work in progress — neural-network core + data pipeline done (web tool to
+follow).
