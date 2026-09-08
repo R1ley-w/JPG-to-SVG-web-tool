@@ -88,6 +88,7 @@ def _ssim(a: np.ndarray, b: np.ndarray) -> float:
 
 def main() -> None:
     args = parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = torch.load(args.checkpoint, map_location="cpu")
     cfg = ckpt.get("config", {})
 
@@ -102,6 +103,7 @@ def main() -> None:
         backbone=cfg.get("backbone", "resnet18"),
     )
     model.load_state_dict(ckpt["model"])
+    model.to(device)
     model.eval()
 
     pairs = load_manifest(args.data_dir)
@@ -123,7 +125,7 @@ def main() -> None:
     for img_path, _ in pairs:
         with Image.open(img_path) as im:
             target = im.convert("RGBA")
-            x = transform(im.convert("RGB")).unsqueeze(0)
+            x = transform(im.convert("RGB")).unsqueeze(0).to(device)
 
         with torch.no_grad():
             tokens = model.generate(x, max_len, temperature=temperature, top_p=top_p)

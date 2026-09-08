@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = torch.load(args.checkpoint, map_location="cpu")
     cfg = ckpt.get("config", {})
 
@@ -41,10 +42,11 @@ def main() -> None:
         backbone=cfg.get("backbone", "resnet18"),
     )
     model.load_state_dict(ckpt["model"])
+    model.to(device)
     model.eval()
 
     with Image.open(args.image) as im:
-        x = get_transform()(im.convert("RGB")).unsqueeze(0)
+        x = get_transform()(im.convert("RGB")).unsqueeze(0).to(device)
 
     max_len = args.max_len or cfg.get("max_len", 256)
     temperature = 0.0 if args.method == "greedy" else args.temperature
