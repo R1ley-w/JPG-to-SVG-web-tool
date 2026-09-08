@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import random
+import re
 import tempfile
 from pathlib import Path
 from typing import List, Tuple
@@ -12,7 +13,13 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from .dataset import LogoDataset, collate_fn, get_transform, load_manifest
+from .dataset import (
+    LogoDataset,
+    collate_fn,
+    filter_by_token_length,
+    get_transform,
+    load_manifest,
+)
 from .model import Im2VecModel
 from .tokenizer import SVGTokenizer, Vocab
 
@@ -82,7 +89,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-len", type=int, default=256)
     p.add_argument("--save-dir", type=Path, default=Path("checkpoints"))
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--augment", action="store_true", help="random flips (raster + vector)")
+    p.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help="resume from a checkpoint (epoch inferred from filename)",
+    )
     return p.parse_args()
+
+
+def _epoch_from_path(p: Path) -> int:
+    """Infer the epoch number from a checkpoint filename (``model_epoch50.pt``)."""
+    m = re.search(r"epoch(\d+)", p.name)
+    return int(m.group(1)) if m else 0
 
 
 def main() -> None:
@@ -93,6 +113,34 @@ def main() -> None:
     print(f"device={device}")
 
     tokenizer = SVGTokenizer()
+
+    state_dict = None
+    if args.resume is not None:
+        ckpt = torch.load(args.resume, map_location="cpu")
+        state_dict = ckpt["model"]
+        cfg = ckpt.get("config", {})
+        model_cfg = {
+            "d_model": cfg.get("d_model", args.d_model),
+            "nhead": cfg.get("nhead", args.nhead),
+            "num_layers": cfg.get("num_layers", args.num_layers),
+            "dim_feedforward": cfg.get("dim_feedforward", args.dim_ff),
+            "max_len": cfg.get("max_len", args.max_len),
+            "backbone": cfg.get("backbone", args.backbone),
+        }
+        start_epoch = _epoch_from_path(args.resume)
+        print(f"resuming from {args.resume} (epoch {start_epoch})")
+    else:
+        model_cfg = {
+            "d_model": args.d_model,
+            "nhead": args.nhead,
+            "num_layers": args.num_layers,
+            "dim_feedforward": args.dim_ff,
+            "max_len": args.max_len,
+            "backbone": args.backbone,
+        }
+        start_epoch = 0
+
+    max_len = model_cfg["max_len"]
 
     if args.smoke:
         tmp = Path(tempfile.mkdtemp(prefix="im2vec_smoke_"))
@@ -106,31 +154,31 @@ def main() -> None:
 
     if not pairs:
         raise SystemExit(f"No paired images/SVGs found in {data_dir}")
-    print(f"{len(pairs)} samples")
+    print(f"{len(pairs)} samples (before length filter)")
 
-    dataset = LogoDataset(pairs, tokenizer, max_len=args.max_len)
+    pairs = filter_by_token_length(pairs, tokenizer, max_len)
+    if not pairs:
+        raise SystemExit(f"No samples left after length filter (max_len={max_len})")
+    print(f"{len(pairs)} samples after length filter (max_len={max_len})")
+
+    dataset = LogoDataset(pairs, tokenizer, max_len=max_len, augment=args.augment)
     loader = DataLoader(
         dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn
     )
 
     model = Im2VecModel(
         vocab_size=tokenizer.vocab_size,
-        d_model=args.d_model,
-        nhead=args.nhead,
-        num_layers=args.num_layers,
-        dim_feedforward=args.dim_ff,
-        max_len=args.max_len,
-        backbone=args.backbone,
+        d_model=model_cfg["d_model"],
+        nhead=model_cfg["nhead"],
+        num_layers=model_cfg["num_layers"],
+        dim_feedforward=model_cfg["dim_feedforward"],
+        max_len=max_len,
+        backbone=model_cfg["backbone"],
     ).to(device)
+    if state_dict is not None:
+        model.load_state_dict(state_dict)
 
-    config = {
-        "d_model": args.d_model,
-        "nhead": args.nhead,
-        "num_layers": args.num_layers,
-        "dim_feedforward": args.dim_ff,
-        "max_len": args.max_len,
-        "backbone": args.backbone,
-    }
+    config = model_cfg
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     use_amp = device.type == "cuda"
@@ -138,7 +186,8 @@ def main() -> None:
 
     args.save_dir.mkdir(parents=True, exist_ok=True)
 
-    for epoch in range(args.epochs):
+    total_epochs = start_epoch + args.epochs
+    for epoch in range(start_epoch, total_epochs):
         model.train()
         total = 0.0
         for images, tokens in loader:
@@ -162,7 +211,7 @@ def main() -> None:
             total += loss.item()
 
         avg = total / max(1, len(loader))
-        print(f"epoch {epoch + 1:3d}/{args.epochs}  loss={avg:.4f}")
+        print(f"epoch {epoch + 1:3d}/{total_epochs}  loss={avg:.4f}", flush=True)
 
         if (epoch + 1) % 5 == 0 or args.smoke:
             torch.save(
