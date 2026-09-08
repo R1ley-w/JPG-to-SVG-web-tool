@@ -27,3 +27,6 @@ runs/
 
 # OS
 .DS_Store
+
+# Handoff (local only)
+TRAINING_HANDOFF.md
