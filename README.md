@@ -56,7 +56,28 @@ python -m im2vec.data.render  --svg-dir data/figr8
 all). PNGs are written alongside the SVGs (same stem) so
 `train.py --data-dir data/figr8` pairs them automatically.
 
+## Web app
+
+Run the drag-and-drop converter:
+
+```
+python -m im2vec.app --checkpoint checkpoints/model_epoch100.pt
+```
+
+Then open <http://127.0.0.1:8000>. Drop a PNG/JPEG on the left; the SVG
+preview and download button appear on the right.
+
+- The model loads once at startup (CUDA if available, else CPU).
+- `--checkpoint` points to a trained checkpoint (default
+  `checkpoints/model_epoch100.pt`); `IM2VEC_CHECKPOINT` is an alternative.
+- `POST /api/convert` accepts an uploaded image and returns `{"svg": ...}`.
+
+Run the tests (test deps: `pip install pytest httpx2`):
+
+```
+python -m pytest tests/ -q
+```
+
 ## Status
 
-Work in progress — neural-network core + data pipeline done (web tool to
-follow).
+Work in progress — neural-network core, data pipeline, and web tool are done.

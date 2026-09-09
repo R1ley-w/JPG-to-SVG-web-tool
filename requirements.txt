@@ -5,3 +5,6 @@ Pillow
 svgpathtools
 cairosvg
 pyarrow
+fastapi
+uvicorn
+python-multipart
