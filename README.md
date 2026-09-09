@@ -58,7 +58,22 @@ all). PNGs are written alongside the SVGs (same stem) so
 
 ## Web app
 
-Run the drag-and-drop converter:
+Two frontends wrap the trained model. Both share `im2vec/inference.py`.
+
+### Gradio (Hugging Face Space, ZeroGPU)
+
+```
+python -m im2vec.gradio_app
+```
+
+Drag a PNG/JPEG logo to convert it to an editable SVG. On a ZeroGPU Space the
+inference runs on the shared GPU (`@spaces.GPU`); locally it falls back to CPU.
+
+- Checkpoint is fetched from the Hub by default (`R1l3y-w/im2vec-logo`,
+  `model_epoch100.pt`). Override with `IM2VEC_MODEL_REPO`/`IM2VEC_MODEL_FILE`,
+  or point `IM2VEC_CHECKPOINT` at a local file.
+
+### FastAPI (self-hosted)
 
 ```
 python -m im2vec.app --checkpoint checkpoints/model_epoch100.pt
@@ -67,7 +82,6 @@ python -m im2vec.app --checkpoint checkpoints/model_epoch100.pt
 Then open <http://127.0.0.1:8000>. Drop a PNG/JPEG on the left; the SVG
 preview and download button appear on the right.
 
-- The model loads once at startup (CUDA if available, else CPU).
 - `--checkpoint` points to a trained checkpoint (default
   `checkpoints/model_epoch100.pt`); `IM2VEC_CHECKPOINT` is an alternative.
 - `POST /api/convert` accepts an uploaded image and returns `{"svg": ...}`.
@@ -80,4 +94,4 @@ python -m pytest tests/ -q
 
 ## Status
 
-Work in progress — neural-network core, data pipeline, and web tool are done.
+Work in progress — neural-network core, data pipeline, and web apps are done.
