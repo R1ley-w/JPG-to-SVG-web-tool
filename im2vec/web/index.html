@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logo to SVG</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="header">
+      <h1>Logo to SVG</h1>
+      <p class="subtitle">
+        Drag a PNG or JPEG logo and get an editable vector back.
+      </p>
+    </header>
+
+    <main class="panels">
+      <section class="panel" aria-label="Upload">
+        <div class="dropzone" id="dropzone">
+          <input
+            type="file"
+            id="file-input"
+            accept="image/png,image/jpeg,image/webp"
+            hidden
+          />
+          <div class="dropzone-inner">
+            <svg
+              class="upload-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 16V4" />
+              <path d="M7 9l5-5 5 5" />
+              <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+            </svg>
+            <p class="drop-text">Drag &amp; drop an image here</p>
+            <p class="drop-hint">or <span class="browse">browse files</span></p>
+            <p class="drop-sub">PNG, JPEG, or WebP &middot; up to 10&nbsp;MB</p>
+          </div>
+        </div>
+        <div class="preview" id="image-preview" hidden>
+          <img id="preview-img" alt="Uploaded image preview" />
+          <p class="filename" id="filename"></p>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Result">
+        <div class="placeholder" id="placeholder">
+          <p>Your SVG will appear here</p>
+        </div>
+        <div class="result" id="result" hidden>
+          <div class="checker">
+            <img id="svg-preview" alt="SVG preview" />
+          </div>
+          <button class="download-btn" id="download-btn" type="button">
+            Download .svg
+          </button>
+        </div>
+        <div class="loading" id="loading" hidden>
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Converting&hellip;</p>
+        </div>
+        <div class="error" id="error" hidden></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
