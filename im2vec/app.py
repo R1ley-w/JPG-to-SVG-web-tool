@@ -15,70 +15,19 @@ or::
 from __future__ import annotations
 
 import argparse
-import io
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import torch
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
 
-from .dataset import get_transform
-from .model import Im2VecModel
-from .tokenizer import SVGTokenizer
+from .inference import load_model, predict_svg
 
 WEB_DIR = Path(__file__).parent / "web"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
-
-
-def load_model(
-    checkpoint_path: Path,
-    device: torch.device | None = None,
-) -> tuple[Im2VecModel, SVGTokenizer, dict, torch.device]:
-    """Load a trained checkpoint into an ``Im2VecModel`` on the given device."""
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(
-            f"Checkpoint not found: {checkpoint_path} "
-            f"(set IM2VEC_CHECKPOINT or pass --checkpoint)"
-        )
-    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ckpt = torch.load(checkpoint_path, map_location="cpu")
-    cfg = ckpt.get("config", {})
-
-    tokenizer = SVGTokenizer()
-    model = Im2VecModel(
-        vocab_size=tokenizer.vocab_size,
-        d_model=cfg.get("d_model", 512),
-        nhead=cfg.get("nhead", 8),
-        num_layers=cfg.get("num_layers", 6),
-        dim_feedforward=cfg.get("dim_feedforward", 2048),
-        max_len=cfg.get("max_len", 512),
-        backbone=cfg.get("backbone", "resnet18"),
-        pretrained=False,  # state_dict already contains the (fine-tuned) encoder
-    )
-    model.load_state_dict(ckpt["model"])
-    model.to(device)
-    model.eval()
-    return model, tokenizer, cfg, device
-
-
-def predict_svg(
-    model: Im2VecModel,
-    tokenizer: SVGTokenizer,
-    device: torch.device,
-    image_bytes: bytes,
-    max_len: int,
-) -> str:
-    """Run the model on raw image bytes and return the decoded SVG string."""
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    x = get_transform()(image).unsqueeze(0).to(device)
-    with torch.no_grad():
-        tokens = model.generate(x, max_len, temperature=0.0)
-    return tokenizer.decode_tokens(tokens[0].tolist())
 
 
 @asynccontextmanager
