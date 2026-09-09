@@ -8,3 +8,6 @@ pyarrow
 fastapi
 uvicorn
 python-multipart
+gradio
+spaces
+huggingface_hub
