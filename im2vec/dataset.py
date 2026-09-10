@@ -17,6 +17,28 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
+def flatten_to_rgb(
+    image: Image.Image, background: Tuple[int, int, int] = (255, 255, 255)
+) -> Image.Image:
+    """Composite a (possibly transparent) image onto ``background`` and drop alpha.
+
+    ``Image.convert("RGB")`` does **not** alpha-composite — it just discards
+    the alpha channel, exposing whatever RGB values sit underneath fully
+    transparent pixels. Renderers such as cairosvg store ``(0, 0, 0)`` there,
+    so a naive ``.convert("RGB")`` on a transparent-background PNG silently
+    turns the entire background black. Always flatten through this function
+    instead of calling ``.convert("RGB")`` directly on raster input.
+    """
+    if image.mode in ("RGBA", "LA") or (
+        image.mode == "P" and "transparency" in image.info
+    ):
+        image = image.convert("RGBA")
+        canvas = Image.new("RGB", image.size, background)
+        canvas.paste(image, mask=image.split()[-1])
+        return canvas
+    return image.convert("RGB")
+
+
 def load_manifest(data_dir: Path) -> List[Tuple[Path, Path]]:
     """Pair up ``*.png``/``*.jpg``/``*.jpeg`` with same-stem ``*.svg`` files."""
     pairs: List[Tuple[Path, Path]] = []
@@ -125,7 +147,7 @@ class LogoDataset(Dataset):
         img_path, svg_path = self.pairs[idx]
         flip_x = flip_y = False
         with Image.open(img_path) as im:
-            im = im.convert("RGB")
+            im = flatten_to_rgb(im)
             if self.augment:
                 flip_x = random.random() < 0.5
                 flip_y = random.random() < 0.5

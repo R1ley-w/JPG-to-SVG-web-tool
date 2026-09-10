@@ -8,7 +8,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from .dataset import get_transform
+from .dataset import flatten_to_rgb, get_transform
 from .model import Im2VecModel
 from .tokenizer import SVGTokenizer
 
@@ -46,7 +46,7 @@ def main() -> None:
     model.eval()
 
     with Image.open(args.image) as im:
-        x = get_transform()(im.convert("RGB")).unsqueeze(0).to(device)
+        x = get_transform()(flatten_to_rgb(im)).unsqueeze(0).to(device)
 
     max_len = args.max_len or cfg.get("max_len", 256)
     temperature = 0.0 if args.method == "greedy" else args.temperature

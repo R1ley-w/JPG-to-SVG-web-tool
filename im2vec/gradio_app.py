@@ -29,6 +29,7 @@ except ImportError:  # pragma: no cover - local dev without the `spaces` package
             return deco(fn)
         return deco
 
+from .dataset import flatten_to_rgb
 from .inference import load_model, load_model_from_hub, predict_svg
 
 _MODEL = None
@@ -86,7 +87,7 @@ def convert(image: Image.Image | None) -> tuple[str, str | None]:
     max_len = _CONFIG.get("max_len", 512)
 
     buf = io.BytesIO()
-    image.convert("RGB").save(buf, format="PNG")
+    flatten_to_rgb(image).save(buf, format="PNG")
     data = buf.getvalue()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -117,7 +118,14 @@ def build_demo() -> gr.Blocks:
                 image = gr.Image(
                     type="pil",
                     label="Upload logo",
-                    image_mode="RGB",
+                    # Keep the native mode (RGBA for PNGs with transparency)
+                    # instead of forcing "RGB" here: Gradio's own RGB
+                    # conversion does a plain `.convert("RGB")`, which does
+                    # NOT alpha-composite and turns transparent backgrounds
+                    # solid black before this code ever sees the image.
+                    # `convert()` above flattens onto white itself via
+                    # `flatten_to_rgb`, while alpha is still available.
+                    image_mode=None,
                     sources=["upload"],
                 )
                 convert_btn = gr.Button("Convert", variant="primary")

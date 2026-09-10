@@ -79,6 +79,31 @@ def test_vocab_size():
     assert SVGTokenizer().vocab_size == 265
 
 
+def test_style_attribute_fill_and_stroke():
+    # Many real-world SVGs (e.g. Noto Emoji) paint via a CSS `style=` attribute
+    # instead of the `fill`/`stroke` presentation attributes; style must win.
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
+        '<rect x="10" y="20" width="100" height="80" style="fill:#ff0000;"/>'
+        '<circle cx="128" cy="128" r="64" fill="none" '
+        'style="stroke:#0000ff; stroke-width:4;"/></svg>'
+    )
+    out = _roundtrip(svg)
+    assert 'fill="rgb(255,0,0)"' in out
+    assert 'stroke="rgb(0,0,255)"' in out
+    assert 'stroke-width="4"' in out
+
+
+def test_missing_fill_attribute_defaults_black():
+    # No `fill` and no `style` at all -> SVG spec default (black), not None.
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
+        '<rect x="0" y="0" width="10" height="10"/></svg>'
+    )
+    out = _roundtrip(svg)
+    assert 'fill="rgb(0,0,0)"' in out
+
+
 def test_stroke_outline():
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'

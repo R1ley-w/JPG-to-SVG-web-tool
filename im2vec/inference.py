@@ -12,7 +12,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from .dataset import get_transform
+from .dataset import flatten_to_rgb, get_transform
 from .model import Im2VecModel
 from .tokenizer import SVGTokenizer
 
@@ -65,7 +65,7 @@ def predict_svg(
     max_len: int,
 ) -> str:
     """Run the model on raw image bytes and return the decoded SVG string."""
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = flatten_to_rgb(Image.open(io.BytesIO(image_bytes)))
     x = get_transform()(image).unsqueeze(0).to(device)
     with torch.no_grad():
         tokens = model.generate(x, max_len, temperature=0.0)

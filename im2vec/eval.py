@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from .dataset import get_transform, load_manifest
+from .dataset import flatten_to_rgb, get_transform, load_manifest
 from .model import Im2VecModel
 from .tokenizer import SVGTokenizer
 
@@ -125,7 +125,7 @@ def main() -> None:
     for img_path, _ in pairs:
         with Image.open(img_path) as im:
             target = im.convert("RGBA")
-            x = transform(im.convert("RGB")).unsqueeze(0).to(device)
+            x = transform(flatten_to_rgb(im)).unsqueeze(0).to(device)
 
         with torch.no_grad():
             tokens = model.generate(x, max_len, temperature=temperature, top_p=top_p)

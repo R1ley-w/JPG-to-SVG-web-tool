@@ -453,6 +453,25 @@ def _apply_matrix(
 # ---------------------------------------------------------------------------
 
 
+def _style_props(elem: ET.Element) -> dict:
+    """Parse an inline ``style="fill:...; stroke:...;"`` attribute into a dict.
+
+    CSS `style` takes precedence over presentation attributes (`fill=`,
+    `stroke=`) per the SVG spec, and many real-world SVGs (e.g. Noto Emoji)
+    only set paint via `style`.
+    """
+    style = elem.get("style")
+    if not style:
+        return {}
+    props = {}
+    for decl in style.split(";"):
+        if ":" not in decl:
+            continue
+        key, _, val = decl.partition(":")
+        props[key.strip().lower()] = val.strip()
+    return props
+
+
 def _parse_color(value: Optional[str]) -> Tuple[int, int, int]:
     """Parse an SVG color into RGB ints. Defaults to black when unknown."""
     if value is None:
@@ -609,7 +628,8 @@ class SVGTokenizer:
 
     @staticmethod
     def _fill_color(elem: ET.Element) -> Optional[Tuple[int, int, int]]:
-        value = elem.get("fill")
+        style = _style_props(elem)
+        value = style.get("fill", elem.get("fill"))
         if value is None:
             return (0, 0, 0)
         value = value.strip().lower()
@@ -621,8 +641,9 @@ class SVGTokenizer:
     def _stroke_color(
         elem: ET.Element,
     ) -> Tuple[Optional[Tuple[int, int, int]], float]:
-        value = elem.get("stroke")
-        width = elem.get("stroke-width", "1")
+        style = _style_props(elem)
+        value = style.get("stroke", elem.get("stroke"))
+        width = style.get("stroke-width", elem.get("stroke-width", "1"))
         try:
             width = float(width)
         except ValueError:

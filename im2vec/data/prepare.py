@@ -1,8 +1,9 @@
-"""One-command FIGR-8 setup: download SVGs then render paired PNGs.
+"""One-command dataset setup: download SVGs then render paired PNGs.
 
 Usage::
 
-    python -m im2vec.data.prepare --split train --n 5000 --out data/figr8
+    python -m im2vec.data.prepare --dataset svg-emoji --split train --out data/svg-emoji/train
+    python -m im2vec.data.prepare --dataset figr8 --split train --n 5000 --out data/figr8
 """
 
 from __future__ import annotations
@@ -10,12 +11,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .download import download_figr_svg
+from .download import DATASETS, download_svgs
 from .render import render_svgs
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Download + render FIGR-8")
+    p = argparse.ArgumentParser(description="Download + render an SVG dataset")
+    p.add_argument("--dataset", choices=sorted(DATASETS), default="figr8")
     p.add_argument("--split", choices=["train", "valid", "test"], default="train")
     p.add_argument("--n", type=int, default=None, help="max SVGs to download")
     p.add_argument("--out", type=Path, required=True, help="output dir for svg+png")
@@ -29,8 +31,8 @@ def main() -> None:
     args = parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
-    n = download_figr_svg(args.out, split=args.split, n=args.n)
-    print(f"downloaded {n} SVGs")
+    n = download_svgs(args.out, dataset=args.dataset, split=args.split, n=args.n)
+    print(f"downloaded {n} SVGs  (license: {DATASETS[args.dataset]['license']})")
 
     if args.svg_only:
         return
