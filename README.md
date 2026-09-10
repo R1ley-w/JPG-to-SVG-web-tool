@@ -41,23 +41,31 @@ pip install -r requirements.txt
 
 ## Dataset
 
-Two SVG sources are supported out of the box (`im2vec/data/download.py:DATASETS`):
+Three SVG sources are supported out of the box (`im2vec/data/download.py:DATASETS`):
 
 | `--dataset` | Source | Rows (train) | Color | License |
 |---|---|---|---|---|
 | `figr8` | `starvector/FIGR-SVG` | ~1.3M | **monochrome black only** (no `fill`/`style` in the source SVGs — see caveat below) | CC BY-NC 4.0 (non-commercial) |
 | `svg-emoji` | `starvector/svg-emoji` | 8,708 | full color | mixed: Twemoji CC-BY 4.0, Noto Emoji Apache-2.0/OFL, OpenMoji CC BY-SA 4.0 (share-alike) |
+| `svg-stack` | `starvector/svg-stack` | 2.17M | mostly full color (real logos/icons/flags/diagrams scraped from GitHub) | mixed: license-filtered permissive GitHub repos (via BigCode's The Stack); per-file provenance untracked |
 
 > **FIGR-8 caveat:** every sampled FIGR-8 icon relies on the SVG default fill
 > (black) — there is no color signal anywhere in that dataset, so a model
 > trained only on it will never predict anything but black fills, regardless
-> of the input image's colors. Use `svg-emoji` (or another colored source) to
-> train a model that actually reproduces logo colors.
+> of the input image's colors. Use `svg-emoji`/`svg-stack` (or another
+> colored source) to train a model that actually reproduces logo colors.
+
+> **svg-stack caveat:** it's scraped, so ~20% of sampled SVGs tokenize past
+> `--max-len 512` (dropped automatically by the length filter) and ~3% fail
+> to parse at all (skipped). Still, ~40% of its shapes carry real (non-black)
+> color, vs. 100% black for FIGR-8 — see the fill-color statistics discussed
+> in this project's history for how these numbers were measured.
 
 Download SVGs and render paired PNGs (one command):
 
 ```
 python -m im2vec.data.prepare --dataset svg-emoji --split train --out data/svg-emoji/train
+python -m im2vec.data.prepare --dataset svg-stack --split train --n 30000 --out data/svg-stack/train
 ```
 
 Or run the two steps separately:
@@ -68,12 +76,21 @@ python -m im2vec.data.render  --svg-dir data/svg-emoji/train
 ```
 
 `--split` is `train`/`valid`/`test`; `--n` caps the number of SVGs (omit for
-all). PNGs are written alongside the SVGs (same stem) so
-`train.py --data-dir data/svg-emoji/train` pairs them automatically. Repeat
-for `--split valid` / `--split test` if you want held-out data for `eval.py`.
+all — not recommended for `svg-stack`, which has 2.17M rows). PNGs are
+written alongside the SVGs (same stem) so `load_manifest`/`train.py` pair
+them automatically. Repeat for `--split valid` / `--split test` if you want
+held-out data for `eval.py`.
 
-Recommended training flags for `svg-emoji` (long/complex icons, small
-dataset): `--max-len 512 --augment`.
+`train.py --data-dir` accepts multiple directories and combines them into
+one training set, e.g. to train on `svg-emoji` + `svg-stack` together:
+
+```
+python -m im2vec.train --data-dir data/svg-emoji/train data/svg-stack/train \
+  --epochs 50 --max-len 512 --augment --save-dir checkpoints
+```
+
+Recommended training flags for these datasets (long/complex icons, smaller
+sample sizes than FIGR-8): `--max-len 512 --augment`.
 
 ### Known fix: alpha backgrounds
 

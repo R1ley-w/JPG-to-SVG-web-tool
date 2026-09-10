@@ -51,6 +51,19 @@ DATASETS: dict = {
             "OpenMoji (CC BY-SA 4.0, share-alike) — full-color icons"
         ),
     },
+    "svg-stack": {
+        "repo_id": "starvector/svg-stack",
+        "id_col": "Filename",
+        "svg_col": "Svg",
+        "splits": {"train": "train", "valid": "val", "test": "test"},
+        "license": (
+            "mixed: scraped from permissively-licensed GitHub repos (via "
+            "BigCode's The Stack, license-filtered per-repo) — real logos, "
+            "icons, flags, and diagrams, mostly full-color. Per-file "
+            "provenance isn't tracked, so treat with the same care as any "
+            "large scraped corpus if redistributing verbatim."
+        ),
+    },
 }
 
 

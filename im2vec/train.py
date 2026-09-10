@@ -75,7 +75,13 @@ def make_synthetic_data(
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train Im2Vec")
-    p.add_argument("--data-dir", type=Path, default=None, help="dir of paired PNG/JPG + SVG files")
+    p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        nargs="+",
+        help="one or more dirs of paired PNG/JPG + SVG files (combined into one training set)",
+    )
     p.add_argument("--smoke", action="store_true", help="overfit synthetic data (pipeline test)")
     p.add_argument("--smoke-n", type=int, default=16, help="synthetic samples for --smoke")
     p.add_argument("--epochs", type=int, default=20)
@@ -147,8 +153,12 @@ def main() -> None:
         pairs = make_synthetic_data(args.smoke_n, tmp)
         data_dir = tmp
     elif args.data_dir is not None:
-        pairs = load_manifest(args.data_dir)
-        data_dir = args.data_dir
+        pairs = []
+        for d in args.data_dir:
+            found = load_manifest(d)
+            print(f"{len(found)} samples in {d}")
+            pairs.extend(found)
+        data_dir = args.data_dir[0]
     else:
         raise SystemExit("Provide --data-dir or use --smoke")
 
