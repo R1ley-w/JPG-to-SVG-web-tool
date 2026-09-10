@@ -116,3 +116,37 @@ def test_stroke_outline():
     assert 'fill="none"' in out
     # no filled paths leak in
     assert 'fill="rgb(' not in out
+
+
+def test_decode_truncated_generation_stops_cleanly():
+    # Simulates an undertrained/cut-off model: a FILL command not followed by
+    # 3 real numeric tokens (here it's cut off after just one number, then
+    # hits PAD). Must stop decoding rather than reinterpret a control token
+    # as a color channel (e.g. a negative or out-of-range value).
+    t = SVGTokenizer()
+    tokens = [Vocab.SOS, Vocab.FILL, Vocab.NUM_OFFSET + 10, Vocab.PAD]
+    out = t.decode_tokens(tokens)
+    assert "<path" not in out
+    assert "rgb(" not in out
+
+
+def test_decode_path_truncated_mid_command_stops_cleanly():
+    # A `C` (6-arg) command with only 2 numbers before the sequence ends.
+    t = SVGTokenizer()
+    tokens = [
+        Vocab.SOS,
+        Vocab.FILL,
+        Vocab.NUM_OFFSET,
+        Vocab.NUM_OFFSET,
+        Vocab.NUM_OFFSET,
+        Vocab.M,
+        Vocab.NUM_OFFSET + 5,
+        Vocab.NUM_OFFSET + 5,
+        Vocab.C,
+        Vocab.NUM_OFFSET + 1,
+        Vocab.NUM_OFFSET + 1,
+        Vocab.PAD,
+    ]
+    out = t.decode_tokens(tokens)
+    d = out.split('d="')[1].split('"')[0]
+    assert d == "M 5 5"

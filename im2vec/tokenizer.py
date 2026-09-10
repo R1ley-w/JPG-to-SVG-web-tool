@@ -702,6 +702,18 @@ class SVGTokenizer:
 
     # -- decoding ---------------------------------------------------------
 
+    @staticmethod
+    def _is_num_token(tok: int) -> bool:
+        """True if ``tok`` is a numeric value token (not a command/control token).
+
+        A well-formed sequence never needs this, but a model's raw output can
+        violate the grammar (e.g. generation cut off mid-command at
+        ``max_len``, or an undertrained model). Without this check, a stray
+        command token gets silently reinterpreted as a number -- producing
+        invalid SVG such as a negative color channel.
+        """
+        return Vocab.NUM_OFFSET <= tok < Vocab.NUM_OFFSET + Vocab.NUM_RANGE
+
     def decode_tokens(self, tokens: Sequence[int]) -> str:
         """Decode a token sequence back into an SVG document string."""
         n = len(tokens)
@@ -714,17 +726,18 @@ class SVGTokenizer:
             if tok in (Vocab.EOS, Vocab.PAD):
                 break
             if tok == Vocab.FILL:
-                r = tokens[i + 1] - Vocab.NUM_OFFSET
-                g = tokens[i + 2] - Vocab.NUM_OFFSET
-                b = tokens[i + 3] - Vocab.NUM_OFFSET
+                args = tokens[i + 1 : i + 4]
+                if len(args) < 3 or not all(self._is_num_token(t) for t in args):
+                    break  # malformed generation; stop rather than emit garbage
+                r, g, b = (t - Vocab.NUM_OFFSET for t in args)
                 i += 4
                 d, i = self._decode_path(tokens, i)
                 shapes.append(f'<path fill="rgb({r},{g},{b})" d="{d}"/>')
             elif tok == Vocab.STROKE:
-                r = tokens[i + 1] - Vocab.NUM_OFFSET
-                g = tokens[i + 2] - Vocab.NUM_OFFSET
-                b = tokens[i + 3] - Vocab.NUM_OFFSET
-                w = tokens[i + 4] - Vocab.NUM_OFFSET
+                args = tokens[i + 1 : i + 5]
+                if len(args) < 4 or not all(self._is_num_token(t) for t in args):
+                    break  # malformed generation; stop rather than emit garbage
+                r, g, b, w = (t - Vocab.NUM_OFFSET for t in args)
                 i += 5
                 d, i = self._decode_path(tokens, i)
                 shapes.append(
@@ -753,11 +766,13 @@ class SVGTokenizer:
                 i += 1
                 continue
             arity = Vocab.COMMAND_ARITY[tok]
-            nums = [
-                tokens[j] - Vocab.NUM_OFFSET
-                for j in range(i + 1, min(i + 1 + arity, n))
-            ]
+            args = tokens[i + 1 : i + 1 + arity]
             if arity:
+                if len(args) < arity or not all(
+                    self._is_num_token(t) for t in args
+                ):
+                    break  # malformed generation; stop rather than emit garbage
+                nums = [t - Vocab.NUM_OFFSET for t in args]
                 parts.append(cmd + " " + " ".join(str(v) for v in nums))
             else:
                 parts.append(cmd)
